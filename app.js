@@ -92,35 +92,67 @@ function updateFileName() {
 
 // Parse CSV file
 function parseCSV(text) {
-    const lines = text.trim().split('\n');
-    const headers = lines[0].split(',').map(h => h.trim());
+    try {
+        const lines = text.trim().split('\n');
+        console.log('CSV lines:', lines.length);
+        
+        if (lines.length < 2) {
+            throw new Error('CSV file must have at least a header and one data row');
+        }
+        
+        const headers = lines[0].split(',').map(h => h.trim().toLowerCase());
+        console.log('Headers:', headers);
+        console.log('Dimensions:', dimensions);
 
-    const teamScores = [];
+        const teamScores = [];
 
-    for (let i = 1; i < lines.length; i++) {
-        const values = lines[i].split(',').map(v => v.trim());
-        const teamName = values[0];
-        const scores = {};
+        for (let i = 1; i < lines.length; i++) {
+            const line = lines[i].trim();
+            if (!line) continue; // Skip empty lines
+            
+            const values = line.split(',').map(v => v.trim());
+            const teamName = values[0];
+            
+            console.log(`Processing team ${i}: ${teamName}, values count: ${values.length}`);
+            
+            if (!teamName) continue; // Skip rows without team name
+            
+            const scores = {};
 
-        dimensions.forEach((dim, idx) => {
-            const headerIdx = headers.findIndex(h => {
-                const h_lower = h.toLowerCase();
-                const dim_lower = dim.toLowerCase().replace(/\s+/g, ' ');
-                return h_lower.includes(dim_lower.split(' ')[0]);
+            dimensions.forEach((dim) => {
+                const dim_lower = dim.toLowerCase();
+                // Find the header that best matches this dimension
+                const headerIdx = headers.findIndex(h => {
+                    // Check if header contains all significant words from dimension
+                    const dimWords = dim_lower.split(/\s+/);
+                    return dimWords.every(word => h.includes(word));
+                });
+
+                console.log(`  Dimension "${dim}" -> headerIdx: ${headerIdx}`);
+
+                if (headerIdx >= 0 && headerIdx < values.length) {
+                    const value = parseFloat(values[headerIdx]);
+                    if (!isNaN(value)) {
+                        scores[dim] = value;
+                    }
+                }
             });
 
-            if (headerIdx >= 0) {
-                scores[dim] = parseFloat(values[headerIdx]);
+            console.log(`  Scores found: ${Object.keys(scores).length}/${dimensions.length}`);
+            
+            if (Object.keys(scores).length === dimensions.length) {
+                teamScores.push({ name: teamName, scores });
             }
-        });
-
-        if (Object.keys(scores).length === dimensions.length) {
-            teamScores.push({ name: teamName, scores });
         }
-    }
 
-    return teamScores;
+        console.log('Total teams parsed:', teamScores.length);
+        return teamScores;
+    } catch (e) {
+        console.error('Error in parseCSV:', e);
+        throw e;
+    }
 }
+
 
 // Calculate Euclidean distance
 function euclideanDistance(scores1, scores2) {
@@ -231,14 +263,14 @@ async function submitScores() {
                 showError('No valid teams found in CSV');
                 return;
             }
+            
+            // Display results for each team
+            displayResults(teamsData);
         } catch (e) {
             showError('Error parsing CSV: ' + e.message);
             return;
         }
     }
-
-    // Generate results
-    displayResults(teamsData);
 }
 
 // Display results
@@ -257,6 +289,7 @@ function displayResults(teamsData) {
 
         const resultHTML = `
             <div style="margin-bottom: 60px; ${idx > 0 ? 'border-top: 2px solid #eee; padding-top: 40px;' : ''}">
+                <h2 style="text-align: center; color: #2c3e50; margin-bottom: 20px; font-size: 28px;">${teamData.name}</h2>
                 <div class="result-header">
                     <div class="archetype-name">${archetype}</div>
                     <div class="confidence-badge">Confidence: ${confidence}%</div>
